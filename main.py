@@ -7,6 +7,7 @@ import torch
 from sac import SAC
 from tensorboardX import SummaryWriter
 from replay_memory import ReplayMemory
+import doorenv2
 
 parser = argparse.ArgumentParser(description='PyTorch Soft Actor-Critic Args')
 parser.add_argument('--env-name', default="HalfCheetah-v2",
@@ -30,7 +31,7 @@ parser.add_argument('--seed', type=int, default=123456, metavar='N',
                     help='random seed (default: 123456)')
 parser.add_argument('--batch_size', type=int, default=256, metavar='N',
                     help='batch size (default: 256)')
-parser.add_argument('--num_steps', type=int, default=1000001, metavar='N',
+parser.add_argument('--num_steps', type=int, default=10000001, metavar='N',
                     help='maximum number of steps (default: 1000000)')
 parser.add_argument('--hidden_size', type=int, default=256, metavar='N',
                     help='hidden size (default: 256)')
@@ -46,9 +47,20 @@ parser.add_argument('--cuda', action="store_true",
                     help='run on CUDA (default: False)')
 args = parser.parse_args()
 
+
+
 # Environment
 # env = NormalizedActions(gym.make(args.env_name))
-env = gym.make(args.env_name)
+# env = gym.make(args.env_name)
+############
+env_kwargs = dict(port = 1050,
+                visionnet_input = False,
+                unity = False,
+                world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_motor_lefthinge_single/',
+                pos_control = False)
+env = gym.make(args.env_name, **env_kwargs)
+env._max_episode_steps = 512
+############
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 env.seed(args.seed)
