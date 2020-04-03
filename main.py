@@ -56,7 +56,7 @@ args = parser.parse_args()
 env_kwargs = dict(port = 1050,
                 visionnet_input = False,
                 unity = False,
-                world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_motor_lefthinge_single/',
+                world_path = '/u/home/urakamiy/doorgym/world_generator/world/pull_blue_right_v2_gripper_motor_lefthinge_single/',
                 pos_control = False)
 env = gym.make(args.env_name, **env_kwargs)
 env._max_episode_steps = 512
@@ -69,8 +69,9 @@ env.seed(args.seed)
 agent = SAC(env.observation_space.shape[0], env.action_space, args)
 
 #TesnorboardX
-writer = SummaryWriter(logdir='runs/{}_SAC_{}_{}_{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), args.env_name,
-                                                             args.policy, "autotune" if args.automatic_entropy_tuning else ""))
+logdir='runs-dev/{}_SAC_{}_{}_{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), args.env_name,
+                                                             args.policy, "autotune" if args.automatic_entropy_tuning else "")
+writer = SummaryWriter(logdir)
 
 # Memory
 memory = ReplayMemory(args.replay_size)
@@ -147,6 +148,12 @@ for i_episode in itertools.count(1):
         print("----------------------------------------")
         print("Test Episodes: {}, Avg. Reward: {}".format(episodes, round(avg_reward, 2)))
         print("----------------------------------------")
+
+    #########
+    # save agent
+    if i_episode % 100 == 0:
+        agent.save_model(args.env_name, logdir, suffix=i_episode)
+    #########
 
 env.close()
 
