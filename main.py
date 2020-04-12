@@ -31,7 +31,7 @@ parser.add_argument('--seed', type=int, default=123456, metavar='N',
                     help='random seed (default: 123456)')
 parser.add_argument('--batch_size', type=int, default=256, metavar='N',
                     help='batch size (default: 256)')
-parser.add_argument('--num_steps', type=int, default=10000001, metavar='N',
+parser.add_argument('--num_steps', type=int, default=1000001, metavar='N',
                     help='maximum number of steps (default: 1000000)')
 parser.add_argument('--hidden_size', type=int, default=256, metavar='N',
                     help='hidden size (default: 256)')
@@ -45,6 +45,8 @@ parser.add_argument('--replay_size', type=int, default=1000000, metavar='N',
                     help='size of replay buffer (default: 10000000)')
 parser.add_argument('--cuda', action="store_true",
                     help='run on CUDA (default: False)')
+parser.add_argument('--id', type=str, default="test",
+                    help='name for the experiments')
 args = parser.parse_args()
 
 
@@ -56,7 +58,7 @@ args = parser.parse_args()
 env_kwargs = dict(port = 1050,
                 visionnet_input = False,
                 unity = False,
-                world_path = '/u/home/urakamiy/doorgym/world_generator/world/pull_blue_right_v2_gripper_motor_lefthinge_single/',
+                world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_motor_lefthinge_single/',
                 pos_control = False)
 env = gym.make(args.env_name, **env_kwargs)
 env._max_episode_steps = 512
@@ -69,8 +71,9 @@ env.seed(args.seed)
 agent = SAC(env.observation_space.shape[0], env.action_space, args)
 
 #TesnorboardX
-logdir='runs-dev/{}_SAC_{}_{}_{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), args.env_name,
-                                                             args.policy, "autotune" if args.automatic_entropy_tuning else "")
+logdir='runs/{}_SAC_{}_{}_{}_{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), args.env_name,
+                                                             args.policy, "autotune" if args.automatic_entropy_tuning else ""
+                                                             , args.id)
 writer = SummaryWriter(logdir)
 
 # Memory
