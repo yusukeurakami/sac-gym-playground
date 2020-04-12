@@ -47,6 +47,8 @@ parser.add_argument('--cuda', action="store_true",
                     help='run on CUDA (default: False)')
 parser.add_argument('--id', type=str, default="test",
                     help='name for the experiments')
+parser.add_argument('--pos_control', action="store_true",
+                    help='use position control of joints (default: False)')
 args = parser.parse_args()
 
 
@@ -54,12 +56,16 @@ args = parser.parse_args()
 # Environment
 # env = NormalizedActions(gym.make(args.env_name))
 # env = gym.make(args.env_name)
+if args.pos_control:
+    print("Using: position control")
+else:
+    print("Using: torque control")
 ############
 env_kwargs = dict(port = 1050,
                 visionnet_input = False,
                 unity = False,
                 world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_motor_lefthinge_single/',
-                pos_control = False)
+                pos_control = args.pos_control)
 env = gym.make(args.env_name, **env_kwargs)
 env._max_episode_steps = 512
 ############
@@ -88,6 +94,9 @@ for i_episode in itertools.count(1):
     episode_steps = 0
     done = False
     state = env.reset()
+    ##########
+    current_pos = state[:env.action_space.shape[0]]
+    ##########
 
     while not done:
         if args.start_steps > total_numsteps:
@@ -108,7 +117,17 @@ for i_episode in itertools.count(1):
                 writer.add_scalar('entropy_temprature/alpha', alpha, updates)
                 updates += 1
 
-        next_state, reward, done, _ = env.step(action) # Step
+        ##############
+        if args.pos_control:
+            next_a = action
+            next_a += current_pos
+            next_state, reward, done, _ = env.step(next_a) # Step
+            current_pos = next_state[:env.action_space.shape[0]]
+        else:
+            next_state, reward, done, _ = env.step(action) # Step
+        ##############
+
+        # next_state, reward, done, _ = env.step(action) # Step
         episode_steps += 1
         total_numsteps += 1
         episode_reward += reward
@@ -132,12 +151,25 @@ for i_episode in itertools.count(1):
         episodes = 10
         for _  in range(episodes):
             state = env.reset()
+            ##########
+            current_pos = state[:env.action_space.shape[0]]
+            ##########
             episode_reward = 0
             done = False
             while not done:
                 action = agent.select_action(state, evaluate=True)
 
-                next_state, reward, done, _ = env.step(action)
+                ##############
+                if args.pos_control:
+                    next_a = action
+                    next_a += current_pos
+                    next_state, reward, done, _ = env.step(next_a) # Step
+                    current_pos = next_state[:env.action_space.shape[0]]
+                else:
+                    next_state, reward, done, _ = env.step(action) # Step
+                ##############
+
+                # next_state, reward, done, _ = env.step(action)
                 episode_reward += reward
 
 
