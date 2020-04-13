@@ -47,6 +47,8 @@ parser.add_argument('--cuda', action="store_true",
                     help='run on CUDA (default: False)')
 parser.add_argument('--pos_control', action="store_true",
                     help='use position control of joints (default: False)')
+parser.add_argument('--ik_control', action="store_true",
+                    help='use inverse kinematic position control (default: False)')
 parser.add_argument('--load_name', type=str,
                     help='policy to inference')
 parser.add_argument('--render', action="store_false",
@@ -73,14 +75,22 @@ env = gym.make(args.env_name, **env_kwargs)
 print(env.xml_path)
 env._max_episode_steps = 512
 ############
-
-
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 env.seed(args.seed)
 
+# Action space trick for the IK control
+if not args.ik_control:
+    env_action_space = env.action_space
+    action_size = env.action_space.shape[0]
+else:
+    print("ik action space")
+    low = np.zeros(7)
+    env_action_space = gym.spaces.Box(low=low, high=low, dtype=np.float32)
+    action_size = env_action_space.shape[0]
+
 # Agent
-agent = SAC(env.observation_space.shape[0], env.action_space, args)
+agent = SAC(env.observation_space.shape[0], env_action_space, args)
 ## Load
 actor_path = args.load_name
 critic_path = args.load_name.replace('actor','critic')

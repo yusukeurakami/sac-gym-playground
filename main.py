@@ -51,6 +51,8 @@ parser.add_argument('--pos_control', action="store_true",
                     help='use position control of joints (default: False)')
 parser.add_argument('--ik_control', action="store_true",
                     help='use inverse kinematic position control (default: False)')
+parser.add_argument('--action_repeat', type=int, default=1, metavar='N',
+                    help='number of times to give a same action command (default: 1)')
 args = parser.parse_args()
 
 
@@ -72,7 +74,8 @@ env_kwargs = dict(port = 1050,
                 visionnet_input = False,
                 unity = False,
                 world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_{}_lefthinge_single/'.format(actuator),
-                pos_control = args.pos_control)
+                pos_control = args.pos_control,
+                ik_control = args.ik_control)
 env = gym.make(args.env_name, **env_kwargs)
 print(env.xml_path)
 env._max_episode_steps = 512
@@ -82,10 +85,19 @@ np.random.seed(args.seed)
 env.seed(args.seed)
 
 # Action space trick for the IK control
-# env.action_space = 
+if not args.ik_control:
+    env_action_space = env.action_space
+    action_size = env.action_space.shape[0]
+else:
+    print("ik action space")
+    low = np.zeros(7)
+    env_action_space = gym.spaces.Box(low=low, high=low, dtype=np.float32)
+    action_size = env_action_space.shape[0]
+
+# action_size = env.action_space.shape[0]
 
 # Agent
-agent = SAC(env.observation_space.shape[0], env.action_space, args)
+agent = SAC(env.observation_space.shape[0], env_action_space, args)
 
 #TesnorboardX
 logdir='runs/{}_SAC_{}_{}_{}_{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), args.env_name,
@@ -106,7 +118,7 @@ for i_episode in itertools.count(1):
     done = False
     state = env.reset()
     ##########
-    current_pos = state[:env.action_space.shape[0]]
+    current_pos = state[:action_size]
     ##########
 
     while not done:
@@ -114,6 +126,7 @@ for i_episode in itertools.count(1):
             action = env.action_space.sample()  # Sample random action
         else:
             action = agent.select_action(state)  # Sample action from policy
+        next_a = action
 
         if len(memory) > args.batch_size:
             # Number of updates per step in environment
@@ -128,14 +141,19 @@ for i_episode in itertools.count(1):
                 writer.add_scalar('entropy_temprature/alpha', alpha, total_numsteps)
                 updates += 1
 
+
         ##############
         if args.pos_control:
-            next_a = action
             next_a += current_pos
+        # elif args.ik_control:
+        #     next_a += current_pos
+        #     joint_pos = IK_solver(next_a[:-1])
+        #     next_a = np.concatenate(joint_pos, next_a[-1])
+        for _ in range(args.action_repeat):
             next_state, reward, done, _ = env.step(next_a) # Step
-            current_pos = next_state[:env.action_space.shape[0]]
-        else:
-            next_state, reward, done, _ = env.step(action) # Step
+            if done:
+                break
+        current_pos = next_state[:action_size]
         ##############
 
         # next_state, reward, done, _ = env.step(action) # Step
@@ -151,6 +169,8 @@ for i_episode in itertools.count(1):
 
         state = next_state
 
+        print(">>>>>>>>>>>> episode steps", episode_steps)
+
     if total_numsteps > args.num_steps:
         break
 
@@ -164,21 +184,22 @@ for i_episode in itertools.count(1):
         for _  in range(episodes):
             state = env.reset()
             ##########
-            current_pos = state[:env.action_space.shape[0]]
+            current_pos = state[:action_size]
             ##########
             episode_reward = 0
             done = False
             while not done:
                 action = agent.select_action(state, evaluate=True)
+                next_a = action
 
                 ##############
                 if args.pos_control:
-                    next_a = action
                     next_a += current_pos
+                for _ in range(args.action_repeat):
                     next_state, reward, done, _ = env.step(next_a) # Step
-                    current_pos = next_state[:env.action_space.shape[0]]
-                else:
-                    next_state, reward, done, _ = env.step(action) # Step
+                    if done:
+                        break
+                current_pos = next_state[:action_size]
                 ##############
 
                 # next_state, reward, done, _ = env.step(action)
@@ -188,14 +209,8 @@ for i_episode in itertools.count(1):
                 state = next_state
             avg_reward += episode_reward
             ###############
-            # print(dir(env))
-            # print(dir(env.env))
-            # print(env.env.get_doorangle())
             if abs(env.env.get_doorangle())>=0.2:
                 succeeded += 1
-                # print("door opened")
-            # else:
-                # print("door closed")
             ###############
         avg_reward /= episodes
         writer.add_scalar('test/avg_reward', avg_reward, i_episode)
