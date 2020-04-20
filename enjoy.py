@@ -94,7 +94,7 @@ agent = SAC(env.observation_space.shape[0], env_action_space, args)
 ## Load
 actor_path = args.load_name
 critic_path = args.load_name.replace('actor','critic')
-agent.load_model(actor_path, critic_path)
+agent.load_model(actor_path, None)
 
 
 # Evaluate

@@ -39,9 +39,9 @@ class SAC(object):
                 # self.alpha_optim = Adam([self.log_alpha], lr=args.lr)
                 self.alpha_optim = optim([self.log_alpha], lr=args.lr)
 
-            # self.policy = GaussianPolicy(num_inputs, action_space.shape[0], args.hidden_size, action_space).to(self.device)
+            self.policy = GaussianPolicy(num_inputs, action_space.shape[0], args.hidden_size, action_space).to(self.device)
             # self.policy_optim = Adam(self.policy.parameters(), lr=args.lr)
-            self.policy = GaussianPolicy(num_inputs, action_space.shape[0], args.hidden_size).to(self.device)
+            # self.policy = GaussianPolicy(num_inputs, action_space.shape[0], args.hidden_size).to(self.device)
             self.policy_optim = optim(self.policy.parameters(), lr=args.lr)
 
         else:

@@ -7,7 +7,10 @@ import torch
 from sac import SAC
 from tensorboardX import SummaryWriter
 from replay_memory import ReplayMemory
+
+from gym.envs.robotics.rotations import quat2euler, euler2quat, mat2euler
 import doorenv2
+import zmq
 
 parser = argparse.ArgumentParser(description='PyTorch Soft Actor-Critic Args')
 parser.add_argument('--env-name', default="HalfCheetah-v2",
@@ -55,7 +58,21 @@ parser.add_argument('--action_repeat', type=int, default=1, metavar='N',
                     help='number of times to give a same action command (default: 1)')
 args = parser.parse_args()
 
+class Client():
+    def __init__(self):
+        port = "5556"
+        context = zmq.Context()
+        print ("Connecting to the policy server...")
+        self.socket = context.socket(zmq.REQ)
+        self.socket.connect ("tcp://localhost:%s" % port)
 
+    def IK(self, ee_pos):
+        # print(ee_pos)
+        ee_pos = [float(x) for x in list(ee_pos)]
+        self.socket.send_json(ee_pos)
+        message = self.socket.recv_json()
+        joint_cmd = message
+        return joint_cmd
 
 # Environment
 # env = NormalizedActions(gym.make(args.env_name))
@@ -64,6 +81,7 @@ if args.pos_control:
     print("Using: position control")
 if args.ik_control:
     print("Using: IK control")
+    c = Client()
 else:
     print("Using: torque control")
 ############
@@ -86,13 +104,15 @@ env.seed(args.seed)
 
 # Action space trick for the IK control
 if not args.ik_control:
-    env_action_space = env.action_space
-    action_size = env.action_space.shape[0]
+    low, high = -np.ones(env.action_space.shape[0]), np.ones(env.action_space.shape[0])
+    # env_action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+    # action_size = env.action_space.shape[0]
+    # print(env_action_space.low, env_action_space.high)
 else:
     print("ik action space")
-    low = np.zeros(7)
-    env_action_space = gym.spaces.Box(low=low, high=low, dtype=np.float32)
-    action_size = env_action_space.shape[0]
+    low, high = -np.ones(7), np.ones(7)
+env_action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+action_size = env_action_space.shape[0]
 
 # action_size = env.action_space.shape[0]
 
@@ -123,9 +143,15 @@ for i_episode in itertools.count(1):
 
     while not done:
         if args.start_steps > total_numsteps:
-            action = env.action_space.sample()  # Sample random action
+            # print(env_action_space.sample(), env_action_space.high)
+            # action = env.action_space.sample()  # Sample random action
+            action = env_action_space.sample()  # Sample random action
+            if args.ik_control:
+                action = action[:action_size]
+            print("random action ", action)
         else:
             action = agent.select_action(state)  # Sample action from policy
+            print("actor action ", action)
         next_a = action
 
         if len(memory) > args.batch_size:
@@ -144,11 +170,21 @@ for i_episode in itertools.count(1):
 
         ##############
         if args.pos_control:
+            print("current pos: ",current_pos)
             next_a += current_pos
-        # elif args.ik_control:
-        #     next_a += current_pos
-        #     joint_pos = IK_solver(next_a[:-1])
-        #     next_a = np.concatenate(joint_pos, next_a[-1])
+        elif args.ik_control:
+            print("orig ", next_a)
+            print("euler ", next_a[3:-1])
+            quat = euler2quat(next_a[3:-1])
+            print("quat: ", quat)
+            ee_pos = np.concatenate((next_a[:3], quat))
+            print("ee_pos ", ee_pos)
+            joint_pos = c.IK(ee_pos)
+            if joint_pos == 0:
+                next_a = current_pos
+            else:
+                next_a = joint_pos
+            print("joint_pos ", joint_pos)
         for _ in range(args.action_repeat):
             next_state, reward, done, _ = env.step(next_a) # Step
             if done:
@@ -169,7 +205,7 @@ for i_episode in itertools.count(1):
 
         state = next_state
 
-        print(">>>>>>>>>>>> episode steps", episode_steps)
+        # print(">>>>>>>>>>>> episode steps", episode_steps)
 
     if total_numsteps > args.num_steps:
         break
