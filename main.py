@@ -91,7 +91,7 @@ if args.pos_control: actuator='position'
 env_kwargs = dict(port = 1050,
                 visionnet_input = False,
                 unity = False,
-                world_path = '/u/home/urakamiy/doorgym/world_generator/world/pull_blue_right_v2_gripper_{}_lefthinge_single/'.format(actuator),
+                world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_{}_lefthinge_single/'.format(actuator),
                 pos_control = args.pos_control,
                 ik_control = args.ik_control)
 env = gym.make(args.env_name, **env_kwargs)
@@ -103,14 +103,13 @@ np.random.seed(args.seed)
 env.seed(args.seed)
 
 # Action space trick for the IK control
-if not args.ik_control:
-    low, high = -np.ones(env.action_space.shape[0]), np.ones(env.action_space.shape[0])
-    # env_action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
-    # action_size = env.action_space.shape[0]
-    # print(env_action_space.low, env_action_space.high)
-else:
+if args.pos_control:
+    low, high = -np.ones(env.action_space.shape[0])/10, np.ones(env.action_space.shape[0])/10
+elif args.ik_control:
     print("ik action space")
-    low, high = -np.ones(7), np.ones(7)
+    low, high = -np.ones(7)/10, np.ones(7)/10
+else:
+    low, high = -np.ones(env.action_space.shape[0]), np.ones(env.action_space.shape[0])
 env_action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
 action_size = env_action_space.shape[0]
 
@@ -120,7 +119,7 @@ action_size = env_action_space.shape[0]
 agent = SAC(env.observation_space.shape[0], env_action_space, args)
 
 #TesnorboardX
-logdir='runs-dev/SAC_{}_{}_{}_{}'.format(args.env_name,
+logdir='runs/SAC_{}_{}_{}_{}'.format(args.env_name,
                                         args.policy, 
                                         "autotune" if args.automatic_entropy_tuning else "",
                                         args.id)
@@ -149,43 +148,47 @@ for i_episode in itertools.count(1):
             action = env_action_space.sample()  # Sample random action
             if args.ik_control:
                 action = action[:action_size]
-            print("random action ", action)
+            # print("random action ", action)
         else:
             action = agent.select_action(state)  # Sample action from policy
-            print("actor action ", action)
+            # print("actor action ", action)
         next_a = action
 
-        # if len(memory) > args.batch_size:
-        #     # Number of updates per step in environment
-        #     for i in range(args.updates_per_step):
-        #         # Update parameters of all the networks
-        #         critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.update_parameters(memory, args.batch_size, updates)
+        if len(memory) > args.batch_size:
+            # Number of updates per step in environment
+            for i in range(args.updates_per_step):
+                # Update parameters of all the networks
+                critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.update_parameters(memory, args.batch_size, updates)
 
-        #         writer.add_scalar('loss/critic_1', critic_1_loss, total_numsteps)
-        #         writer.add_scalar('loss/critic_2', critic_2_loss, total_numsteps)
-        #         writer.add_scalar('loss/policy', policy_loss, total_numsteps)
-        #         writer.add_scalar('loss/entropy_loss', ent_loss, total_numsteps)
-        #         writer.add_scalar('entropy_temprature/alpha', alpha, total_numsteps)
-        #         updates += 1
+                writer.add_scalar('loss/critic_1', critic_1_loss, total_numsteps)
+                writer.add_scalar('loss/critic_2', critic_2_loss, total_numsteps)
+                writer.add_scalar('loss/policy', policy_loss, total_numsteps)
+                writer.add_scalar('loss/entropy_loss', ent_loss, total_numsteps)
+                writer.add_scalar('entropy_temprature/alpha', alpha, total_numsteps)
+                updates += 1
 
 
         ##############
         if args.pos_control:
-            print("current pos: ",current_pos)
+            # print("current pos: ",current_pos)
             next_a += current_pos
         elif args.ik_control:
-            print("orig ", next_a)
-            print("euler ", next_a[3:-1])
+            # print("orig ", next_a)
+            # print("euler ", next_a[3:-1])
             quat = euler2quat(next_a[3:-1])
-            print("quat: ", quat)
             ee_pos = np.concatenate((next_a[:3], quat))
-            print("ee_pos ", ee_pos)
             joint_pos = c.IK(ee_pos)
             if joint_pos == 0:
-                next_a = current_pos
+                print("no solution")
+                #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Implement get_current_joint_pos()
+                #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Implement fps()
+                current_joint_pos = np.zeros(8)
+                next_a = current_joint_pos
             else:
-                next_a = joint_pos
-            print("joint_pos ", joint_pos)
+                print("got solution")
+                next_a = joint_pos + [next_a[-1]]
+            # print("joint_pos ", joint_pos)
+            # print("next_a: ", next_a)
         for _ in range(args.action_repeat):
             next_state, reward, done, _ = env.step(next_a) # Step
             if done:
