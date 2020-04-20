@@ -138,13 +138,13 @@ class SAC(object):
 
     # Save model parameters
     def save_model(self, env_name, logdir, suffix="", actor_path=None, critic_path=None):
-        if not os.path.exists('{}/models/'.format(logdir)):
-            os.makedirs('{}/models/'.format(logdir))
+        if not os.path.exists('{}/'.format(logdir)):
+            os.makedirs('{}/'.format(logdir))
 
         if actor_path is None:
-            actor_path = "{}/models/sac_actor_{}_{}".format(logdir, env_name, suffix)
+            actor_path = "{}/sac_actor_{}_{}".format(logdir, env_name, suffix)
         if critic_path is None:
-            critic_path = "{}/models/sac_critic_{}_{}".format(logdir, env_name, suffix)
+            critic_path = "{}/sac_critic_{}_{}".format(logdir, env_name, suffix)
         print('Saving models to {} and {}'.format(actor_path, critic_path))
         torch.save(self.policy.state_dict(), actor_path)
         torch.save(self.critic.state_dict(), critic_path)
