@@ -31,7 +31,7 @@ parser.add_argument('--seed', type=int, default=123456, metavar='N',
                     help='random seed (default: 123456)')
 parser.add_argument('--batch_size', type=int, default=256, metavar='N',
                     help='batch size (default: 256)')
-parser.add_argument('--num_steps', type=int, default=1000001, metavar='N',
+parser.add_argument('--num_steps', type=int, default=2000001, metavar='N',
                     help='maximum number of steps (default: 1000000)')
 parser.add_argument('--hidden_size', type=int, default=256, metavar='N',
                     help='hidden size (default: 256)')
@@ -62,7 +62,7 @@ args = parser.parse_args()
 # env = gym.make(args.env_name)
 if args.pos_control:
     print("Using: position control")
-if args.ik_control:
+elif args.ik_control:
     print("Using: IK control")
 else:
     print("Using: torque control")
@@ -73,7 +73,7 @@ if args.pos_control: actuator='position'
 env_kwargs = dict(port = 1050,
                 visionnet_input = False,
                 unity = False,
-                world_path = '/home/demo/DoorGym/world_generator/world/pull_blue_right_v2_gripper_{}_lefthinge_single/'.format(actuator),
+                world_path = '/u/home/urakamiy/doorgym/world_generator/world/pull_blue_right_v2_gripper_{}_lefthinge_single/'.format(actuator),
                 pos_control = args.pos_control,
                 ik_control = args.ik_control)
 env = gym.make(args.env_name, **env_kwargs)
@@ -89,7 +89,7 @@ if not args.ik_control:
     env_action_space = env.action_space
     action_size = env.action_space.shape[0]
 else:
-    print("ik action space")
+    # print("ik action space")
     low = np.zeros(7)
     env_action_space = gym.spaces.Box(low=low, high=low, dtype=np.float32)
     action_size = env_action_space.shape[0]
@@ -100,9 +100,10 @@ else:
 agent = SAC(env.observation_space.shape[0], env_action_space, args)
 
 #TesnorboardX
-logdir='runs/{}_SAC_{}_{}_{}_{}'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), args.env_name,
-                                                             args.policy, "autotune" if args.automatic_entropy_tuning else ""
-                                                             , args.id)
+logdir='runs-dev/SAC_{}_{}_{}_{}'.format(args.env_name,
+                                        args.policy, 
+                                        "autotune" if args.automatic_entropy_tuning else "",
+                                        args.id)
 writer = SummaryWriter(logdir)
 
 # Memory
@@ -128,18 +129,18 @@ for i_episode in itertools.count(1):
             action = agent.select_action(state)  # Sample action from policy
         next_a = action
 
-        if len(memory) > args.batch_size:
-            # Number of updates per step in environment
-            for i in range(args.updates_per_step):
-                # Update parameters of all the networks
-                critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.update_parameters(memory, args.batch_size, updates)
+        # if len(memory) > args.batch_size:
+        #     # Number of updates per step in environment
+        #     for i in range(args.updates_per_step):
+        #         # Update parameters of all the networks
+        #         critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.update_parameters(memory, args.batch_size, updates)
 
-                writer.add_scalar('loss/critic_1', critic_1_loss, total_numsteps)
-                writer.add_scalar('loss/critic_2', critic_2_loss, total_numsteps)
-                writer.add_scalar('loss/policy', policy_loss, total_numsteps)
-                writer.add_scalar('loss/entropy_loss', ent_loss, total_numsteps)
-                writer.add_scalar('entropy_temprature/alpha', alpha, total_numsteps)
-                updates += 1
+        #         writer.add_scalar('loss/critic_1', critic_1_loss, total_numsteps)
+        #         writer.add_scalar('loss/critic_2', critic_2_loss, total_numsteps)
+        #         writer.add_scalar('loss/policy', policy_loss, total_numsteps)
+        #         writer.add_scalar('loss/entropy_loss', ent_loss, total_numsteps)
+        #         writer.add_scalar('entropy_temprature/alpha', alpha, total_numsteps)
+        #         updates += 1
 
 
         ##############
@@ -169,7 +170,20 @@ for i_episode in itertools.count(1):
 
         state = next_state
 
-        print(">>>>>>>>>>>> episode steps", episode_steps)
+        # print(">>>>>>>>>>>> episode steps", episode_steps)
+
+    if len(memory) > args.batch_size:
+        # Number of updates per step in environment
+        for i in range(args.updates_per_step):
+            # Update parameters of all the networks
+            critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.update_parameters(memory, args.batch_size, updates)
+
+            writer.add_scalar('loss/critic_1', critic_1_loss, total_numsteps)
+            writer.add_scalar('loss/critic_2', critic_2_loss, total_numsteps)
+            writer.add_scalar('loss/policy', policy_loss, total_numsteps)
+            writer.add_scalar('loss/entropy_loss', ent_loss, total_numsteps)
+            writer.add_scalar('entropy_temprature/alpha', alpha, total_numsteps)
+            updates += 1
 
     if total_numsteps > args.num_steps:
         break
@@ -226,7 +240,7 @@ for i_episode in itertools.count(1):
 
     #########
     # save agent
-    if i_episode % 100 == 0:
+    if i_episode % 500 == 0:
         agent.save_model(args.env_name, logdir, suffix=i_episode)
     #########
 
